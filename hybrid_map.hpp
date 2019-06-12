@@ -28,8 +28,6 @@
 
 namespace hmap
 {
-    typedef unsigned char uchar_t;
-
     template <class string_type = std::string>
     class string_adapter
     {
@@ -37,10 +35,9 @@ namespace hmap
         const string_type &_data;
 
     public:
-
         string_adapter(const string_type &input = string_type()) : _data(input) {}
-        const void *data() const { return _data.c_str(); }
-        size_t size() const { return _data.size(); }
+        const void *data() const { return std::data(_data); }
+        size_t size() const { return std::size(_data); }
     };
 
     class char_adapter
@@ -49,7 +46,6 @@ namespace hmap
         const char *_data;
 
     public:
-
         char_adapter(const char *input = "\0") : _data(input) {}
         const void *data() const { return _data; }
         size_t size() const { return std::strlen(_data); }
@@ -68,41 +64,6 @@ namespace hmap
         size_t size() const { return sizeof(_data); }
     };
 
-    template<class key_type = char>
-    class keys_keeper
-    {
-    private:
-        void **&_keys;
-        size_t _keys_size;
-        size_t *_key_lengths;
-        bool _released;
-
-    public:
-        keys_keeper(void **&keys, size_t keys_size, size_t *key_lengths = 0) :
-        _keys(keys),
-            _keys_size(keys_size),
-            _key_lengths(key_lengths),
-            _released(false) {}
-
-        ~keys_keeper()
-        {
-            if (!_released)
-            {
-                for(size_t index(0); index < _keys_size; delete[] (reinterpret_cast<key_type**>(_keys))[index], ++index) ;
-
-                delete[] _keys;
-                delete[] _key_lengths;
-            }
-        }
-
-        void release() { _released = true; }
-        size_t count() const { return _keys_size; }
-        size_t size() const { return _keys_size; }
-
-        const key_type* operator [] (size_t index) const { return (reinterpret_cast<key_type**>(_keys))[index]; }
-        size_t operator () (size_t index) const { return _key_lengths[index]; }
-    };
-
     template<typename data_type>
     class fast_list
     {
@@ -110,10 +71,10 @@ namespace hmap
         class fast_list_node
         {
         private:
-            typedef fast_list_node self_type;
-            typedef self_type* self_type_ptr;
-            typedef self_type& self_type_ref;
-            typedef const self_type* self_type_const_ptr;
+            using self_type = fast_list_node;
+            using self_type_ptr = self_type*;
+            using self_type_ref = self_type&;
+            using self_type_const_ptr = const self_type_ptr;
 
             self_type_ptr _prev;
             self_type_ptr _next;
@@ -326,20 +287,21 @@ namespace hmap
     };
 
 	template <class data_type, template<class> class container_policy> class hybrid_map_node;
+	template<class data_type, template<class> class container_type> class hybrid_map;
 
     template<class data_type>
     class hybrid_map_node_container_policy_ARRAY
     {
     private:
-        typedef hybrid_map_node<data_type, hybrid_map_node_container_policy_ARRAY> node_type;
-        typedef node_type* node_type_ptr;
+        using node_type = hybrid_map_node<data_type, hybrid_map_node_container_policy_ARRAY>;
+        using node_type_ptr = node_type*;
 
-        uchar_t _key;
-        uchar_t _size;
+        uint8_t _key;
+        uint8_t _size;
         node_type_ptr _children[256];
 
     public:
-        hybrid_map_node_container_policy_ARRAY(uchar_t key) :
+        hybrid_map_node_container_policy_ARRAY(uint8_t key) :
             _key(key),
             _size(0)
         {
@@ -364,17 +326,17 @@ namespace hmap
             return _size;
         }
 
-        uchar_t key() const
+        uint8_t key() const
         {
             return _key;
         }
 
-        node_type_ptr get_key(uchar_t key) const
+        node_type_ptr get_key(uint8_t key) const
         {
             return _children[key];
         }
 
-        node_type_ptr add(uchar_t key, node_type_ptr parent_node)
+        node_type_ptr add(uint8_t key, node_type_ptr parent_node)
         {
             if(_children[key])
                 return _children[key];
@@ -387,20 +349,19 @@ namespace hmap
             return _children[key];
         }
 
-        void remove(uchar_t key)
+        void remove(uint8_t key)
         {
             if (_children[key])
                 delete _children[key], _children[key] = 0, --_size;
         }
 
-        node_type_ptr next(uchar_t key) const
+        node_type_ptr next(uint8_t key) const
         {
             size_t index(key);
 
             for (; index < 256 && !_children[index]; ++index) ;
 
-            if (index > 255)
-                return 0;
+            if (index > 255) return nullptr;
 
             return _children[index];
         }
@@ -410,16 +371,16 @@ namespace hmap
     class hybrid_map_node_container_policy_FAST_LIST
     {
     private:
-        typedef hybrid_map_node<data_type, hybrid_map_node_container_policy_FAST_LIST> node_type;
-        typedef node_type* node_type_ptr;
-		typedef fast_list<node_type_ptr> children_list_type;
-		typedef typename children_list_type::node_type_ptr child_node_type_ptr;
+        using node_type = hybrid_map_node<data_type, hybrid_map_node_container_policy_FAST_LIST>;
+        using node_type_ptr = node_type*;
+		using children_list_type = fast_list<node_type_ptr>;
+		using child_node_type_ptr = typename children_list_type::node_type_ptr;
 
-        uchar_t _key;
-        uchar_t _size;
+        uint8_t _key;
+        uint8_t _size;
 		children_list_type _children;
 
-        child_node_type_ptr get_node_ptr(uchar_t key) const
+        child_node_type_ptr get_node_ptr(uint8_t key) const
         {
             if (key < 128)
             {
@@ -438,7 +399,7 @@ namespace hmap
         }
 
     public:
-        hybrid_map_node_container_policy_FAST_LIST(uchar_t key) :
+        hybrid_map_node_container_policy_FAST_LIST(uint8_t key) :
             _key(key),
             _size(0),
             _children()
@@ -464,19 +425,19 @@ namespace hmap
             return _size;
         }
 
-        uchar_t key() const
+        uint8_t key() const
         {
             return _key;
         }
 
-        node_type_ptr get_key(uchar_t key) const
+        node_type_ptr get_key(uint8_t key) const
         {
             child_node_type_ptr node(get_node_ptr(key));
 
-            return node ? node->data() : 0;
+            return node ? node->data() : nullptr;
         }
 
-        node_type_ptr add(uchar_t key, node_type_ptr parent_node)
+        node_type_ptr add(uint8_t key, node_type_ptr parent_node)
         {
            node_type_ptr node(get_key(key));
 
@@ -498,7 +459,7 @@ namespace hmap
             return 0;
         }
 
-        void remove(uchar_t key)
+        void remove(uint8_t key)
         {
             child_node_type_ptr node(get_node_ptr(key));
 
@@ -506,33 +467,29 @@ namespace hmap
                 _children.erase(node), --_size;
         }
 
-        node_type_ptr next(uchar_t key) const
+        node_type_ptr next(uint8_t key) const
         {
             node_type_ptr node(get_key(key));
 
-            if(!node)
-                return 0;
+            if(!node) return nullptr;
 
             node = node->next(key);
 
-            if(!node)
-                return 0;
+            if(!node) return nullptr;
 
             return node;
         }
     };
 
-	template<class data_type, template<class> class container_type> class hybrid_map;
-
 	template <class data_type, template<class> class container_policy>
 	class hybrid_map_node : public container_policy<data_type>
 	{
 	public:
-        typedef container_policy<data_type> children_type;
-		typedef hybrid_map_node<data_type, container_policy> self_type;
-		typedef self_type* self_type_ptr;
+        using children_type = container_policy<data_type>;
+		using self_type = hybrid_map_node<data_type, container_policy>;
+		using self_type_ptr = self_type*;
 
-        hybrid_map_node(uchar_t key, self_type_ptr parent) :
+        hybrid_map_node(uint8_t key, self_type_ptr parent) :
             children_type(key),
             _depth(0),
             _parent(parent),
@@ -552,17 +509,17 @@ namespace hmap
             return children_type::size();
         }
 
-        self_type_ptr get_key(uchar_t key) const
+        self_type_ptr get_key(uint8_t key) const
         {
             return children_type::get_key(key);
         }
 
-        self_type_ptr add(uchar_t key)
+        self_type_ptr add(uint8_t key)
         {
             return children_type::add(key, this);
         }
 
-        void remove(uchar_t key)
+        void remove(uint8_t key)
         {
             children_type::remove(key);
         }
@@ -584,7 +541,7 @@ namespace hmap
 
         void path(void *user_buffer, size_t &length, const void *tail = "\0", size_t tail_length = 1)
         {
-            uchar_t *chain(static_cast<uchar_t*>(user_buffer));
+            uint8_t *chain(static_cast<uint8_t*>(user_buffer));
             length = _depth;
 
             if(tail && tail_length)
@@ -595,7 +552,7 @@ namespace hmap
             for(int index(length - 1); index >= 0; chain[index] = node->_key, node = node->_parent, --index) ;
         }
 
-        void path(std::vector<uchar_t> &vector)
+        void path(std::vector<uint8_t> &vector)
         {
             size_t length(depth());
 
@@ -603,10 +560,10 @@ namespace hmap
 
             self_type_ptr node(this);
 
-            for(int index(length - 1); index >= 0; vector[index] = node->_key, node = node->_parent, --index) ;
+            for(int index(length - 1); index >= 0; vector[index] = node->key(), node = node->_parent, --index) ;
         }
 
-        self_type_ptr next(uchar_t key) const
+        self_type_ptr next(uint8_t key) const
         {
             return children_type::next(key);
         }
@@ -624,10 +581,10 @@ namespace hmap
 	class hybrid_map
 	{
 	public:
-        typedef hybrid_map<data_type, container_policy> self_type;
-        typedef self_type* self_type_ptr;
-		typedef hybrid_map_node<data_type, container_policy> node_type;
-		typedef node_type* node_type_ptr;
+        using self_type = hybrid_map<data_type, container_policy>;
+        using self_type_ptr = self_type*;
+		using node_type = hybrid_map_node<data_type, container_policy>;
+		using node_type_ptr = node_type*;
 
         hybrid_map() :
             _root(new node_type(0, 0)),
@@ -648,7 +605,7 @@ namespace hmap
 
         data_type &insert(const void *path, size_t path_length)
         {
-            const uchar_t *byte_path(static_cast<const uchar_t*>(path));
+            const uint8_t *byte_path(static_cast<const uint8_t*>(path));
 
             _current = _root;
 
@@ -669,7 +626,7 @@ namespace hmap
 
         template<class adapter> data_type &insert(const adapter& proxy)
         {
-            return insert(proxy.data(), proxy.size());
+            return insert(std::data(proxy), std::size(proxy));
         }
 
         data_type &insert(const void *path, size_t path_length, node_type_ptr &result_node)
@@ -683,7 +640,7 @@ namespace hmap
 
         template<class adapter> data_type &insert(const adapter& proxy, node_type_ptr &result_node)
         {
-            return insert(proxy.data(), proxy.size(), result_node);
+            return insert(std::data(proxy), std::size(proxy), result_node);
         }
 
         void remove(node_type_ptr node)
@@ -722,7 +679,7 @@ namespace hmap
 
         template<class adapter> void remove(const adapter& proxy)
         {
-            return remove(proxy.data(), proxy.size());
+            return remove(std::data(proxy), std::size(proxy));
         }
 
         void clear()
@@ -747,7 +704,7 @@ namespace hmap
 
             while (next(_current) && (current_depth = _current->_depth) > depth)
             {
-                uchar_t current_path[current_depth];
+                uint8_t current_path[current_depth];
 
                 _current->path(current_path, current_depth, 0, 0);
 
@@ -782,7 +739,7 @@ namespace hmap
 
         template<class adapter> data_type &data(const adapter& proxy)
         {
-            return data(proxy.data(), proxy.size());
+            return data(std::data(proxy), std::size(proxy));
         }
 
         data_type data(const void *path, size_t path_length) const
@@ -795,7 +752,7 @@ namespace hmap
 
         template<class adapter> data_type data(const adapter& proxy) const
         {
-            return data(proxy.data(), proxy.size());
+            return data(std::data(proxy), std::size(proxy));
         }
 
         bool find(const void *path, size_t path_length)
@@ -808,7 +765,7 @@ namespace hmap
 
         template<class adapter> bool find(const adapter& proxy)
         {
-            return find(proxy.data(), proxy.size());
+            return find(std::data(proxy), std::size(proxy));
         }
 
         bool find(const void *path, size_t path_length, data_type &stored_data)
@@ -824,7 +781,7 @@ namespace hmap
 
         template<class adapter> bool find(const adapter& proxy, data_type &stored_data)
         {
-            return find(proxy.data(), proxy.size(), stored_data);
+            return find(std::data(proxy), std::size(proxy), stored_data);
         }
 
         bool find(const void *path, size_t path_length, node_type_ptr &node)
@@ -840,7 +797,7 @@ namespace hmap
 
         template<class adapter> bool find(const adapter& proxy, node_type_ptr &node)
         {
-            return find(proxy.data(), proxy.size(), node);
+            return find(std::data(proxy), std::size(proxy), node);
         }
 
         node_type_ptr node(const void *path, size_t path_length)
@@ -853,7 +810,7 @@ namespace hmap
 
         template<class adapter> node_type_ptr node(const adapter& proxy)
         {
-            return node(proxy.data(), proxy.size());
+            return node(std::data(proxy), std::size(proxy));
         }
 
         node_type_ptr root() const
@@ -924,7 +881,7 @@ namespace hmap
             return result;
         }
 
-        void keys(std::vector<std::vector<uchar_t> > &keys)
+        void keys(std::vector<std::vector<uint8_t> > &keys)
         {
             keys.resize(_size);
 
@@ -940,7 +897,7 @@ namespace hmap
             if (!path || !path_length)
                 return true;
 
-            const uchar_t *byte_path(static_cast<const uchar_t*>(path));
+            const uint8_t *byte_path(static_cast<const uint8_t*>(path));
             node_type_ptr node(_root);
 
             for (size_t index(0); index < path_length; ++index)
@@ -977,7 +934,7 @@ namespace hmap
             return true;
         }
 
-        template<class hybrid_map_callback> int scan(hybrid_map_callback callback, void *user_data = 0, node_type_ptr node = 0)
+        template<class hybrid_map_callback> int scan(hybrid_map_callback callback, node_type_ptr node = nullptr, void *user_data = nullptr)
         {
             node_type_ptr from_node(((node) ? node : _root));
             int result(__scan(from_node, callback, user_data));
@@ -1029,36 +986,29 @@ namespace hmap
 
             node_type_ptr next(copy._root);
 
-            std::vector<uchar_t> path;
+            std::vector<uint8_t> path;
 
             while (copy.next(next))
             {
                 next->path(path);
 
-#ifndef _MSC_VER
                 insert(path) = next->data();
-#else
-                // MS STL does not support data() member function of vector
-                insert(&path[0], path.size()) = next->data();
-#endif
             }
         }
 
         template<class hybrid_map_callback> int __scan(node_type_ptr node, hybrid_map_callback callback, void *user_data)
         {
-            int result(0);
+            int result { 0 };
 
-            if (node->_depth && (result = callback(node, user_data)))
-                return result;
+            if (node->_depth && (result = callback(node, user_data))) return result;
 
-            for (size_t index(0); index < 256; ++index)
-                if (node->_children[index] && (result = __scan(node->_children[index], callback, user_data)))
-                    return result;
+            for (auto nnode { node->next(0) }; nnode; nnode = nnode->next(nnode->key() + 1))
+                if (result = __scan(nnode, callback, user_data); result) return result;
 
             return result;
         }
 
-        void __keys(node_type_ptr node, std::vector<std::vector<uchar_t> > &keys, size_t &indexer)
+        void __keys(node_type_ptr node, std::vector<std::vector<uint8_t> > &keys, size_t &indexer)
         {
             if(node->_depth)
             {
@@ -1089,9 +1039,9 @@ namespace hmap
         {
             if (node->_depth)
             {
-                uchar_t **paths(reinterpret_cast<uchar_t**>(keys));
+                uint8_t **paths(reinterpret_cast<uint8_t**>(keys));
 
-                keys[indexer] = new uchar_t[node->_depth + ((tail && tail_length) ? tail_length : 0)];
+                keys[indexer] = new uint8_t[node->_depth + ((tail && tail_length) ? tail_length : 0)];
 
                 node_type_ptr current_node(node);
 
